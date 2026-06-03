@@ -73,9 +73,18 @@
       </label>
     </section>
 
+    <section class="options" id="multiplayerPanel">
+      <button id="createRoomBtn">Create Room</button>
+      <input id="roomCodeInput" placeholder="Room Code" maxlength="6" style="text-transform:uppercase" />
+      <button id="joinRoomBtn">Join Room</button>
+      <span id="roomStatus">Offline</span>
+    </section>
+
     <p class="help">Controls: adjust angle/power/weapon, then Fire. Player 2 now aims left automatically. Keys: arrows adjust aim, Space fires.</p>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="multiplayer.js"></script>
   <script src="sounds.js"></script>
   <script src="game.js"></script>
 </body>

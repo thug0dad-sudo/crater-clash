@@ -369,3 +369,45 @@ window.addEventListener('keydown', (e) => {
 populateWeapons();
 newGame();
 loop();
+
+/* Multiplayer foundation: non-invasive state helpers */
+window.exportOnlineState = function () {
+  return {
+    terrain,
+    tanks,
+    currentPlayer,
+    wind,
+    gameOver,
+    message
+  };
+};
+
+window.loadOnlineState = function (state) {
+  if (!state) return;
+  if (state.terrain) terrain = state.terrain;
+  if (state.tanks) tanks = state.tanks;
+  if (Number.isInteger(state.currentPlayer)) currentPlayer = state.currentPlayer;
+  if (typeof state.wind === "number") wind = state.wind;
+  if (typeof state.gameOver === "boolean") gameOver = state.gameOver;
+  if (typeof state.message === "string") message = state.message;
+  updateUI();
+  draw();
+};
+
+window.receiveOnlineMove = function (move) {
+  console.log("Received online move:", move);
+};
+
+window.addEventListener("DOMContentLoaded", () => {
+  const createBtn = document.getElementById("createRoomBtn");
+  const joinBtn = document.getElementById("joinRoomBtn");
+  const input = document.getElementById("roomCodeInput");
+
+  createBtn?.addEventListener("click", () => {
+    window.Multiplayer?.createRoom();
+  });
+
+  joinBtn?.addEventListener("click", () => {
+    window.Multiplayer?.joinRoom(input.value);
+  });
+});
