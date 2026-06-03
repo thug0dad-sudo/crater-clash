@@ -1,0 +1,79 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: radial-gradient(circle at top, #263653, #0d1320 70%);
+  color: #f7f7f7;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+#app { width: min(1050px, 96vw); padding: 18px; }
+
+header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; }
+h1 { margin: 0; letter-spacing: 0.04em; }
+p { margin: 4px 0 0; color: #b8c4d8; }
+
+button, select {
+  border: 0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-weight: 800;
+}
+
+button {
+  cursor: pointer;
+  color: white;
+  background: linear-gradient(135deg, #ff8a00, #ff3d71);
+  box-shadow: 0 10px 24px rgba(0,0,0,.25);
+}
+
+button:disabled { opacity: .55; cursor: not-allowed; }
+select { background: rgba(255,255,255,.92); color: #121827; min-width: 132px; }
+
+.hud, .controls, .options {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.hud { grid-template-columns: 1fr 1fr 1fr; }
+.controls { grid-template-columns: 1.2fr 1fr 1fr auto; align-items: center; }
+.options { grid-template-columns: repeat(4, 1fr); }
+
+.card, .controls label, .options label {
+  background: rgba(255,255,255,.09);
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  backdrop-filter: blur(10px);
+}
+
+.card.active { outline: 2px solid #ffd166; box-shadow: 0 0 24px rgba(255,209,102,.25); }
+.wind { text-align: center; }
+
+canvas {
+  width: 100%;
+  display: block;
+  background: linear-gradient(#89c7ff 0%, #d9f1ff 58%, #4c8b42 58%, #254421 100%);
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,.2);
+  box-shadow: 0 24px 60px rgba(0,0,0,.35);
+}
+
+input[type="range"] { width: 52%; accent-color: #ffd166; }
+.help { text-align: center; font-size: 14px; }
+#weaponInfo { min-width: 54px; color: #ffd166; font-weight: 800; }
+
+@media (max-width: 900px) {
+  .hud, .controls, .options { grid-template-columns: 1fr; }
+  header { align-items: flex-start; flex-direction: column; }
+  button { width: 100%; }
+  input[type="range"] { width: 100%; }
+}

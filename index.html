@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crater Clash</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div>
+        <h1>Crater Clash</h1>
+        <p>Original web artillery battle inspired by classic tank games</p>
+      </div>
+      <button id="newGameBtn">New Game</button>
+    </header>
+
+    <section class="hud">
+      <div class="card active" id="p1Card">
+        <strong>Player 1</strong>
+        <span id="p1Health">100 HP</span>
+      </div>
+      <div class="card wind">
+        <strong>Wind</strong>
+        <span id="windReadout">0</span>
+      </div>
+      <div class="card" id="p2Card">
+        <strong>Player 2</strong>
+        <span id="p2Health">100 HP</span>
+      </div>
+    </section>
+
+    <canvas id="game" width="1000" height="560"></canvas>
+
+    <section class="controls">
+      <label>
+        Weapon
+        <select id="weaponSelect"></select>
+        <span id="weaponInfo"></span>
+      </label>
+      <label>
+        Angle
+        <input id="angle" type="range" min="0" max="90" value="45" />
+        <span id="angleValue">45°</span>
+      </label>
+      <label>
+        Power
+        <input id="power" type="range" min="10" max="100" value="55" />
+        <span id="powerValue">55</span>
+      </label>
+      <button id="fireBtn">Fire</button>
+    </section>
+
+    <section class="options">
+      <label><input id="aiToggle" type="checkbox" /> Player 2 AI</label>
+      <label><input id="windToggle" type="checkbox" checked /> Wind enabled</label>
+      <label>
+        Wind strength
+        <select id="windStrength">
+          <option value="0.5">Low</option>
+          <option value="1" selected>Normal</option>
+          <option value="1.8">Wild</option>
+        </select>
+      </label>
+      <label>
+        Terrain
+        <select id="terrainMode">
+          <option value="rolling" selected>Rolling</option>
+          <option value="jagged">Jagged</option>
+          <option value="valley">Valley</option>
+        </select>
+      </label>
+    </section>
+
+    <p class="help">Controls: adjust angle/power/weapon, then Fire. Player 2 now aims left automatically. Keys: arrows adjust aim, Space fires.</p>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
