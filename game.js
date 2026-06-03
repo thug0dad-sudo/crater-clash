@@ -695,3 +695,87 @@ window.receiveOnlineMove = function(move) {
   if (replayRemoteFireMove(move)) return;
   previousReceiveOnlineMoveCleanReplay?.(move);
 };
+
+/* Replay turn-lock fix */
+window.__ccRemoteReplayActive = false;
+window.__ccExpectedTurnAfterReplay = null;
+
+const previousLoadOnlineStateTurnLockFix = window.loadOnlineState;
+window.loadOnlineState = function(state) {
+  // Do not let incoming final snapshots skip/interrupt the visible replay shot.
+  if (window.__ccRemoteReplayActive && projectiles.length > 0) {
+    console.log("Skipped snapshot during remote replay");
+    return;
+  }
+
+  previousLoadOnlineStateTurnLockFix?.(state);
+  updateOnlineTurnControls?.();
+};
+
+function forceTurnAfterReplay(expectedPlayer) {
+  const started = Date.now();
+
+  const check = () => {
+    if (projectiles.length === 0) {
+      currentPlayer = expectedPlayer;
+      window.__ccRemoteReplayActive = false;
+      window.__ccExpectedTurnAfterReplay = null;
+
+      message = `${tanks[currentPlayer]?.name || "Player"} turn`;
+      updateUI();
+      draw();
+      updateOnlineTurnControls?.();
+
+      console.log("Replay complete. Turn forced to:", currentPlayer);
+      return;
+    }
+
+    // Safety timeout so controls do not stay locked forever.
+    if (Date.now() - started > 9000) {
+      currentPlayer = expectedPlayer;
+      projectiles.length = 0;
+      window.__ccRemoteReplayActive = false;
+      window.__ccExpectedTurnAfterReplay = null;
+
+      message = `${tanks[currentPlayer]?.name || "Player"} turn`;
+      updateUI();
+      draw();
+      updateOnlineTurnControls?.();
+
+      console.warn("Replay timed out. Turn forced to:", currentPlayer);
+      return;
+    }
+
+    setTimeout(check, 150);
+  };
+
+  setTimeout(check, 500);
+}
+
+const previousReceiveOnlineMoveTurnLockFix = window.receiveOnlineMove;
+window.receiveOnlineMove = function(move) {
+  if (
+    move &&
+    move.type === "fire" &&
+    window.Multiplayer?.isOnline &&
+    move.player !== window.Multiplayer.playerIndex
+  ) {
+    const nextPlayer = move.player === 0 ? 1 : 0;
+    window.__ccRemoteReplayActive = true;
+    window.__ccExpectedTurnAfterReplay = nextPlayer;
+
+    previousReceiveOnlineMoveTurnLockFix?.(move);
+    forceTurnAfterReplay(nextPlayer);
+    return;
+  }
+
+  previousReceiveOnlineMoveTurnLockFix?.(move);
+  updateOnlineTurnControls?.();
+};
+
+// Extra control refresh so the correct player unlocks after state changes.
+setInterval(() => {
+  if (window.Multiplayer?.isOnline && !window.__ccRemoteReplayActive) {
+    updateOnlineTurnControls?.();
+  }
+}, 1000);
