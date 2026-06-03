@@ -233,6 +233,8 @@ function draw() {
 
 function fire(customWeapon = null) {
   if (projectiles.length || gameOver) return;
+  SFX?.play('launch');
+  SFX?.flight();
   const tank = tanks[currentPlayer];
   const weapon = customWeapon || selectedWeapon();
   lastShotWeapon = weapon;
@@ -264,6 +266,7 @@ function carveCrater(cx, cy, radius) {
 }
 
 function explode(x, y, weapon) {
+  SFX?.play('boom');
   carveCrater(x, y, weapon.radius);
   explosions.push({ x, y, r: weapon.radius, life: 24 });
   for (const tank of tanks) {
@@ -273,7 +276,10 @@ function explode(x, y, weapon) {
     if (distance < weapon.damageRadius) {
       const damage = Math.max(0, Math.round(weapon.maxDamage * (1 - distance / weapon.damageRadius)));
       tank.hp -= damage;
-      if (damage > 0) message = `${tank.name} takes ${damage} damage!`;
+      if (damage > 0) {
+        SFX?.play('hit');
+        message = `${tank.name} takes ${damage} damage!`;
+      }
     }
   }
 }
@@ -288,6 +294,7 @@ function finishTurnIfReady() {
     currentPlayer = 1 - currentPlayer;
     resetWind();
     message = `${tanks[currentPlayer].name} turn`;
+    SFX?.play('beep');
     aiTimer = 0;
   }
   updateUI();
