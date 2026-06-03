@@ -44,6 +44,11 @@ let message = '';
 let explosions = [];
 let aiTimer = 0;
 let lastShotWeapon = weapons[1];
+/* Multiplayer projectile replay state */
+let onlineReplayInProgress = false;
+let onlineSuppressNextFireSend = false;
+let onlineLastFireSentAt = 0;
+
 
 function rand(min, max) { return Math.random() * (max - min) + min; }
 
@@ -233,6 +238,31 @@ function draw() {
 
 function fire(customWeapon = null) {
   if (projectiles.length || gameOver) return;
+
+  if (window.Multiplayer?.isOnline && !onlineSuppressNextFireSend) {
+    if (typeof isMyOnlineTurn === "function" && !isMyOnlineTurn()) {
+      message = "Not your turn.";
+      updateUI();
+      draw();
+      return;
+    }
+
+    const now = Date.now();
+    if (now - onlineLastFireSentAt > 400) {
+      onlineLastFireSentAt = now;
+      window.Multiplayer.sendMove({
+        type: "fire",
+        player: currentPlayer,
+        angle: Number(angleSlider.value),
+        power: Number(powerSlider.value),
+        weapon: weaponSelect.value,
+        wind,
+        ts: now
+      });
+    }
+  }
+
+  onlineSuppressNextFireSend = false;
   SFX?.play('launch');
   SFX?.flight();
   const tank = tanks[currentPlayer];
@@ -581,7 +611,8 @@ finishTurnIfReady = function(...args) {
   const after = currentPlayer;
 
   if (window.Multiplayer?.isOnline && before !== after && projectiles.length === 0) {
-    saveOnlineSnapshotAfterTurn();
+    if (!onlineReplayInProgress) saveOnlineSnapshotAfterTurn();
+    else onlineReplayInProgress = false;
   }
 
   updateOnlineTurnControls?.();
@@ -601,77 +632,42 @@ window.receiveOnlineMove = function(move) {
   }
 };
 
-/* Local-only clean projectile replay patch */
-window.__ccReplayingRemoteShot = false;
 
-const previousIsMyOnlineTurnForReplay = typeof isMyOnlineTurn === "function" ? isMyOnlineTurn : null;
-if (previousIsMyOnlineTurnForReplay) {
-  isMyOnlineTurn = function() {
-    if (window.__ccReplayingRemoteShot) return true;
-    return previousIsMyOnlineTurnForReplay();
-  };
-}
-
-const previousSendMoveForReplay = window.Multiplayer?.sendMove;
-window.addEventListener("DOMContentLoaded", () => {
-  if (window.Multiplayer && !window.Multiplayer.__replaySendWrapped) {
-    const originalSendMove = window.Multiplayer.sendMove.bind(window.Multiplayer);
-    window.Multiplayer.sendMove = function(move) {
-      if (window.__ccReplayingRemoteShot && move?.type === "fire") {
-        return Promise.resolve();
-      }
-      return originalSendMove(move);
-    };
-    window.Multiplayer.__replaySendWrapped = true;
-  }
-});
-
-function replayRemoteFireMove(move) {
+/* Multiplayer projectile replay handler */
+function replayOnlineFireMove(move) {
   if (!move || move.type !== "fire") return false;
   if (!window.Multiplayer?.isOnline) return false;
 
-  // Ignore our own echo.
+  // Ignore our own echoed fire events.
   if (move.player === window.Multiplayer.playerIndex) return true;
 
-  const status = document.getElementById("roomStatus");
-  if (status) status.textContent = `${move.tag || "Opponent"} is firing...`;
+  if (projectiles.length || gameOver) {
+    setTimeout(() => replayOnlineFireMove(move), 250);
+    return true;
+  }
 
-  const tryReplay = () => {
-    if (projectiles.length || gameOver) {
-      setTimeout(tryReplay, 200);
-      return;
-    }
+  onlineReplayInProgress = true;
+  onlineSuppressNextFireSend = true;
 
-    window.__ccReplayingRemoteShot = true;
+  currentPlayer = move.player;
+  if (typeof move.wind === "number") wind = move.wind;
+  if (Number.isFinite(move.angle)) angleSlider.value = String(move.angle);
+  if (Number.isFinite(move.power)) powerSlider.value = String(move.power);
+  if (move.weapon) weaponSelect.value = move.weapon;
 
-    currentPlayer = move.player;
-    if (typeof move.wind === "number") wind = move.wind;
-    if (Number.isFinite(move.angle)) angleSlider.value = String(move.angle);
-    if (Number.isFinite(move.power)) powerSlider.value = String(move.power);
-    if (move.weapon) weaponSelect.value = move.weapon;
+  message = `${move.tag || "Opponent"} fired ${move.weapon || "weapon"}`;
+  updateUI();
+  draw();
 
-    message = `${move.tag || "Opponent"} fired ${move.weapon || "weapon"}`;
-    updateUI();
-    draw();
+  setTimeout(() => {
+    fire(selectedWeapon());
+  }, 350);
 
-    setTimeout(() => {
-      fire(selectedWeapon());
-
-      // Keep replay mode long enough for fire wrappers to finish,
-      // then allow normal turn controls/sync after projectile resolves.
-      setTimeout(() => {
-        window.__ccReplayingRemoteShot = false;
-        updateOnlineTurnControls?.();
-      }, 500);
-    }, 350);
-  };
-
-  tryReplay();
   return true;
 }
 
-const previousReceiveOnlineMoveCleanReplay = window.receiveOnlineMove;
+const previousReceiveOnlineMoveForReplay = window.receiveOnlineMove;
 window.receiveOnlineMove = function(move) {
-  if (replayRemoteFireMove(move)) return;
-  previousReceiveOnlineMoveCleanReplay?.(move);
+  if (replayOnlineFireMove(move)) return;
+  previousReceiveOnlineMoveForReplay?.(move);
 };

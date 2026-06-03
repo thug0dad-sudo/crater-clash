@@ -1,3 +1,18 @@
+#!/bin/bash
+set -e
+
+echo "== Restore stable turn handoff checkpoint, then add local replay patch =="
+
+STAMP=$(date +%Y%m%d-%H%M%S)
+mkdir -p "backups/$STAMP"
+
+cp index.html game.js multiplayer.js sounds.js "backups/$STAMP/" 2>/dev/null || true
+echo "Backup saved to backups/$STAMP"
+
+echo "Restoring stable checkpoint files..."
+git checkout stable-github-pages-multiplayer-turn-handoff -- index.html game.js multiplayer.js sounds.js
+
+cat > multiplayer.js <<'JS'
 const SUPABASE_URL = "https://hzvyklzmsndyoajmhbxb.supabase.co";
 const SUPABASE_KEY = "sb_publishable_lJjQiFns48hCoyH44SKyKA_YbqpPxht";
 
@@ -205,3 +220,92 @@ window.Multiplayer = {
   get gamertag() { return myGamertag; },
   get isOnline() { return onlineRole !== "offline"; }
 };
+JS
+
+cat >> game.js <<'JS'
+
+/* Local-only clean projectile replay patch */
+window.__ccReplayingRemoteShot = false;
+
+const previousIsMyOnlineTurnForReplay = typeof isMyOnlineTurn === "function" ? isMyOnlineTurn : null;
+if (previousIsMyOnlineTurnForReplay) {
+  isMyOnlineTurn = function() {
+    if (window.__ccReplayingRemoteShot) return true;
+    return previousIsMyOnlineTurnForReplay();
+  };
+}
+
+const previousSendMoveForReplay = window.Multiplayer?.sendMove;
+window.addEventListener("DOMContentLoaded", () => {
+  if (window.Multiplayer && !window.Multiplayer.__replaySendWrapped) {
+    const originalSendMove = window.Multiplayer.sendMove.bind(window.Multiplayer);
+    window.Multiplayer.sendMove = function(move) {
+      if (window.__ccReplayingRemoteShot && move?.type === "fire") {
+        return Promise.resolve();
+      }
+      return originalSendMove(move);
+    };
+    window.Multiplayer.__replaySendWrapped = true;
+  }
+});
+
+function replayRemoteFireMove(move) {
+  if (!move || move.type !== "fire") return false;
+  if (!window.Multiplayer?.isOnline) return false;
+
+  // Ignore our own echo.
+  if (move.player === window.Multiplayer.playerIndex) return true;
+
+  const status = document.getElementById("roomStatus");
+  if (status) status.textContent = `${move.tag || "Opponent"} is firing...`;
+
+  const tryReplay = () => {
+    if (projectiles.length || gameOver) {
+      setTimeout(tryReplay, 200);
+      return;
+    }
+
+    window.__ccReplayingRemoteShot = true;
+
+    currentPlayer = move.player;
+    if (typeof move.wind === "number") wind = move.wind;
+    if (Number.isFinite(move.angle)) angleSlider.value = String(move.angle);
+    if (Number.isFinite(move.power)) powerSlider.value = String(move.power);
+    if (move.weapon) weaponSelect.value = move.weapon;
+
+    message = `${move.tag || "Opponent"} fired ${move.weapon || "weapon"}`;
+    updateUI();
+    draw();
+
+    setTimeout(() => {
+      fire(selectedWeapon());
+
+      // Keep replay mode long enough for fire wrappers to finish,
+      // then allow normal turn controls/sync after projectile resolves.
+      setTimeout(() => {
+        window.__ccReplayingRemoteShot = false;
+        updateOnlineTurnControls?.();
+      }, 500);
+    }, 350);
+  };
+
+  tryReplay();
+  return true;
+}
+
+const previousReceiveOnlineMoveCleanReplay = window.receiveOnlineMove;
+window.receiveOnlineMove = function(move) {
+  if (replayRemoteFireMove(move)) return;
+  previousReceiveOnlineMoveCleanReplay?.(move);
+};
+JS
+
+echo ""
+echo "Patch applied locally."
+echo ""
+echo "Test:"
+echo "  python3 -m http.server 3000"
+echo ""
+echo "Open two windows, create/join a room, fire from P1, and confirm P2 sees the projectile fly."
+echo ""
+echo "No GitHub push was performed."

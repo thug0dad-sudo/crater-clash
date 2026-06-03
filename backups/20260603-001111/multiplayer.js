@@ -7,7 +7,6 @@ let roomId = new URLSearchParams(location.search).get("room") || "";
 let onlineRole = "offline";
 let onlinePlayerIndex = null;
 let myGamertag = localStorage.getItem("cc_gamertag") || "";
-let lastSeenMoveId = null;
 
 function cleanGamertag(raw) {
   return String(raw || "")
@@ -47,7 +46,10 @@ async function createRoom() {
     state: {
       hostReady: true,
       turn: 0,
-      players: [{ index: 0, tag }, null],
+      players: [
+        { index: 0, tag },
+        null
+      ],
       move: null,
       snapshot: initial
     }
@@ -126,7 +128,6 @@ async function sendMove(move) {
 
   const taggedMove = {
     ...move,
-    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     player: onlinePlayerIndex,
     tag: myGamertag,
     ts: Date.now()
@@ -141,17 +142,12 @@ async function sendMove(move) {
   const oldState = data?.state || {};
   const nextTurn = (oldState.turn || 0) + 1;
 
-  const isFire = taggedMove.type === "fire";
-
   await supabaseClient.from("games").update({
     state: {
       ...oldState,
       turn: nextTurn,
       move: taggedMove,
-
-      // Critical: do NOT push a snapshot on fire.
-      // The remote side needs to animate the shot first.
-      snapshot: isFire ? oldState.snapshot : (window.exportOnlineState?.() || oldState.snapshot)
+      snapshot: window.exportOnlineState?.() || oldState.snapshot
     },
     updated_at: new Date().toISOString()
   }).eq("id", roomId);
@@ -175,20 +171,12 @@ function subscribeRoom() {
         setRoomStatus(`Room ${roomId} — P1: ${p1} | P2: ${p2}`);
       }
 
-      const move = state.move;
-      if (move?.id && move.id !== lastSeenMoveId) {
-        lastSeenMoveId = move.id;
-
-        // Critical: fire moves are replayed, not snapshot-loaded.
-        if (window.receiveOnlineMove) {
-          window.receiveOnlineMove(move);
-        }
-
-        if (move.type === "fire") return;
-      }
-
       if (state.snapshot && window.loadOnlineState) {
         window.loadOnlineState(state.snapshot);
+      }
+
+      if (state.move && window.receiveOnlineMove) {
+        window.receiveOnlineMove(state.move);
       }
     })
     .subscribe();
