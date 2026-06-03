@@ -45,6 +45,24 @@ let explosions = [];
 let aiTimer = 0;
 let lastShotWeapon = weapons[1];
 
+
+/* Deterministic multiplayer replay helpers */
+let onlineShotSeed = null;
+
+function seededRand(seed) {
+  let t = seed >>> 0;
+  return function () {
+    t += 0x6D2B79F5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function makeShotSeed() {
+  return Math.floor(Math.random() * 0xFFFFFFFF);
+}
+
 function rand(min, max) { return Math.random() * (max - min) + min; }
 
 function selectedWeapon() { return weapons.find(w => w.id === weaponSelect.value) || weapons[1]; }
@@ -645,6 +663,7 @@ function replayRemoteFireMove(move) {
     window.__ccReplayingRemoteShot = true;
 
     currentPlayer = move.player;
+    onlineShotSeed = Number.isFinite(move.seed) ? move.seed : null;
     if (typeof move.wind === "number") wind = move.wind;
     if (Number.isFinite(move.angle)) angleSlider.value = String(move.angle);
     if (Number.isFinite(move.power)) powerSlider.value = String(move.power);
@@ -656,6 +675,7 @@ function replayRemoteFireMove(move) {
 
     setTimeout(() => {
       fire(selectedWeapon());
+      onlineShotSeed = null;
 
       // Keep replay mode long enough for fire wrappers to finish,
       // then allow normal turn controls/sync after projectile resolves.

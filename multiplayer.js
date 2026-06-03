@@ -132,6 +132,10 @@ async function sendMove(move) {
     ts: Date.now()
   };
 
+  if (taggedMove.type === "fire" && !Number.isFinite(taggedMove.seed)) {
+    taggedMove.seed = Math.floor(Math.random() * 0xFFFFFFFF);
+  }
+
   const { data } = await supabaseClient
     .from("games")
     .select("state")
