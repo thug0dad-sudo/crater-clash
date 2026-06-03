@@ -779,3 +779,90 @@ setInterval(() => {
     updateOnlineTurnControls?.();
   }
 }, 1000);
+
+/* Lobby gameplay lock */
+window.__ccMatchStarted = false;
+
+const previousReceiveOnlineMoveLobby = window.receiveOnlineMove;
+window.receiveOnlineMove = function(move) {
+  previousReceiveOnlineMoveLobby?.(move);
+};
+
+const previousFireLobbyLock = fire;
+fire = function(...args) {
+  if (window.Multiplayer?.isOnline && !window.__ccMatchStarted) {
+    message = "Waiting for lobby start.";
+    updateUI();
+    draw();
+    return;
+  }
+
+  return previousFireLobbyLock.apply(this, args);
+};
+
+const previousLoadOnlineStateLobby = window.loadOnlineState;
+window.loadOnlineState = function(state) {
+  previousLoadOnlineStateLobby?.(state);
+  updateOnlineTurnControls?.();
+};
+
+/* Auto-save score on victory */
+let __ccScoreSavedForGame = false;
+
+const previousNewGameScoreReset = newGame;
+newGame = function(...args) {
+  __ccScoreSavedForGame = false;
+  return previousNewGameScoreReset.apply(this, args);
+};
+
+const previousDrawTextScoreWatcher = drawText;
+drawText = function(...args) {
+  const result = previousDrawTextScoreWatcher.apply(this, args);
+
+  if (
+    !__ccScoreSavedForGame &&
+    gameOver &&
+    window.Scores &&
+    window.Multiplayer?.isOnline &&
+    currentPlayer === window.Multiplayer.playerIndex
+  ) {
+    __ccScoreSavedForGame = true;
+    window.Scores.saveResult("win");
+  }
+
+  return result;
+};
+
+/* Score autosave one-time fix */
+let __ccLastAutosaveRoomId = null;
+
+function autosaveWinIfNeeded() {
+  if (!gameOver || !window.Scores || !window.Multiplayer?.isOnline) return;
+
+  const gameId = `room:${window.Multiplayer.roomId}`;
+  if (__ccLastAutosaveRoomId === gameId) return;
+
+  // Winner is the local player only if their tank is alive and the opponent is dead.
+  const me = window.Multiplayer.playerIndex;
+  if (!Number.isInteger(me)) return;
+
+  const opponent = me === 0 ? 1 : 0;
+  if (tanks[me]?.health > 0 && tanks[opponent]?.health <= 0) {
+    __ccLastAutosaveRoomId = gameId;
+    window.Scores.saveResult("win", gameId);
+  }
+}
+
+const previousDrawTextAutosaveFix = drawText;
+drawText = function(...args) {
+  const result = previousDrawTextAutosaveFix.apply(this, args);
+  autosaveWinIfNeeded();
+  return result;
+};
+
+const previousNewGameAutosaveFix = newGame;
+newGame = function(...args) {
+  __ccLastAutosaveRoomId = null;
+  window.Scores?.updateSaveWinButton?.();
+  return previousNewGameAutosaveFix.apply(this, args);
+};
