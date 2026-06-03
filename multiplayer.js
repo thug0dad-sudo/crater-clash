@@ -177,6 +177,8 @@ function subscribeRoom() {
         const p1 = state.players[0]?.tag || "Waiting";
         const p2 = state.players[1]?.tag || "Waiting";
         setRoomStatus(`Room ${roomId} — P1: ${p1} | P2: ${p2}`);
+        window.__ccMatchStarted = !!state.matchStarted;
+        if (typeof renderLobby === "function") renderLobby(state.players, !!state.matchStarted);
       }
 
       const move = state.move;
@@ -209,3 +211,223 @@ window.Multiplayer = {
   get gamertag() { return myGamertag; },
   get isOnline() { return onlineRole !== "offline"; }
 };
+
+/* Lobby system */
+async function updateRoomState(mutator) {
+  if (!roomId) return;
+
+  const { data, error } = await supabaseClient
+    .from("games")
+    .select("state")
+    .eq("id", roomId)
+    .single();
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  const oldState = data?.state || {};
+  const nextState = mutator(oldState) || oldState;
+
+  await supabaseClient
+    .from("games")
+    .update({
+      state: nextState,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", roomId);
+}
+
+async function setReady(ready = true) {
+  if (!roomId || onlinePlayerIndex === null) return;
+
+  await updateRoomState(state => {
+    const players = state.players || [null, null];
+    players[onlinePlayerIndex] = {
+      ...(players[onlinePlayerIndex] || {}),
+      index: onlinePlayerIndex,
+      tag: myGamertag || `Player ${onlinePlayerIndex + 1}`,
+      ready
+    };
+
+    return {
+      ...state,
+      players,
+      matchStarted: !!state.matchStarted
+    };
+  });
+}
+
+async function startMatch() {
+  if (!roomId || onlinePlayerIndex !== 0) {
+    alert("Only Player 1 can start the match.");
+    return;
+  }
+
+  await updateRoomState(state => {
+    const players = state.players || [null, null];
+    const bothReady = players[0]?.ready && players[1]?.ready;
+
+    if (!bothReady) {
+      alert("Both players must be ready.");
+      return state;
+    }
+
+    return {
+      ...state,
+      matchStarted: true,
+      snapshot: window.exportOnlineState?.() || state.snapshot
+    };
+  });
+}
+
+function renderLobby(players = [], matchStarted = false) {
+  const lobby = document.getElementById("lobbyPlayers");
+  const readyBtn = document.getElementById("readyBtn");
+  const startBtn = document.getElementById("startMatchBtn");
+
+  if (!lobby) return;
+
+  const p1 = players[0];
+  const p2 = players[1];
+
+  lobby.innerHTML = `
+    <div>P1: ${p1?.tag || "Waiting"} ${p1?.ready ? "✓ Ready" : ""}</div>
+    <div>P2: ${p2?.tag || "Waiting"} ${p2?.ready ? "✓ Ready" : ""}</div>
+    <div>Status: ${matchStarted ? "Match started" : "Waiting in lobby"}</div>
+  `;
+
+  if (readyBtn) readyBtn.disabled = !roomId || onlinePlayerIndex === null || matchStarted;
+  if (startBtn) startBtn.disabled = onlinePlayerIndex !== 0 || matchStarted;
+}
+
+const oldSubscribeRoomForLobby = subscribeRoom;
+subscribeRoom = function() {
+  oldSubscribeRoomForLobby();
+
+  setTimeout(async () => {
+    const { data } = await supabaseClient
+      .from("games")
+      .select("state")
+      .eq("id", roomId)
+      .single();
+
+    const state = data?.state || {};
+    renderLobby(state.players || [], !!state.matchStarted);
+    window.__ccMatchStarted = !!state.matchStarted;
+  }, 500);
+};
+
+const oldSetRoomStatusForLobby = setRoomStatus;
+setRoomStatus = function(text) {
+  oldSetRoomStatusForLobby(text);
+};
+
+window.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("readyBtn")?.addEventListener("click", () => {
+    setReady(true);
+  });
+
+  document.getElementById("startMatchBtn")?.addEventListener("click", () => {
+    startMatch();
+  });
+});
+
+const oldMultiplayerObject = window.Multiplayer;
+Object.assign(window.Multiplayer, {
+  setReady,
+  startMatch,
+  renderLobby
+});
+
+/* Share room links */
+function getRoomLink() {
+  if (!roomId) return location.origin + location.pathname;
+  return location.origin + location.pathname + "?room=" + encodeURIComponent(roomId);
+}
+
+async function shareRoom() {
+  if (!roomId) {
+    alert("Create or join a room first.");
+    return;
+  }
+
+  const url = getRoomLink();
+  const text = `Join my Crater Clash room: ${roomId}`;
+
+  if (navigator.share) {
+    await navigator.share({ title: "Crater Clash", text, url });
+  } else {
+    await navigator.clipboard.writeText(`${text}\n${url}`);
+    alert("Room link copied to clipboard.");
+  }
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("shareRoomBtn")?.addEventListener("click", shareRoom);
+});
+
+Object.assign(window.Multiplayer, {
+  getRoomLink,
+  shareRoom
+});
+
+/* Restored lobby controls */
+async function updateRoomState(mutator) {
+  if (!roomId) return;
+  const { data } = await supabaseClient.from("games").select("state").eq("id", roomId).single();
+  const oldState = data?.state || {};
+  const nextState = mutator(oldState) || oldState;
+  await supabaseClient.from("games").update({
+    state: nextState,
+    updated_at: new Date().toISOString()
+  }).eq("id", roomId);
+}
+
+async function setReady(ready = true) {
+  if (!roomId || onlinePlayerIndex === null) return;
+  await updateRoomState(state => {
+    const players = state.players || [null, null];
+    players[onlinePlayerIndex] = {
+      ...(players[onlinePlayerIndex] || {}),
+      index: onlinePlayerIndex,
+      tag: myGamertag || `Player ${onlinePlayerIndex + 1}`,
+      ready
+    };
+    return { ...state, players, matchStarted: !!state.matchStarted };
+  });
+}
+
+async function startMatch() {
+  if (onlinePlayerIndex !== 0) return alert("Only Player 1 can start the match.");
+  await updateRoomState(state => {
+    const players = state.players || [null, null];
+    if (!(players[0]?.ready && players[1]?.ready)) {
+      alert("Both players must be ready.");
+      return state;
+    }
+    return { ...state, matchStarted: true, snapshot: window.exportOnlineState?.() || state.snapshot };
+  });
+}
+
+function renderLobby(players = [], matchStarted = false) {
+  const el = document.getElementById("lobbyPlayers");
+  if (!el) return;
+  el.innerHTML = `
+    <div>P1: ${players[0]?.tag || "Waiting"} ${players[0]?.ready ? "✓ Ready" : ""}</div>
+    <div>P2: ${players[1]?.tag || "Waiting"} ${players[1]?.ready ? "✓ Ready" : ""}</div>
+    <div>Status: ${matchStarted ? "Match started" : "Waiting in lobby"}</div>
+  `;
+  const readyBtn = document.getElementById("readyBtn");
+  const startBtn = document.getElementById("startMatchBtn");
+  if (readyBtn) readyBtn.disabled = !roomId || onlinePlayerIndex === null || matchStarted;
+  if (startBtn) startBtn.disabled = onlinePlayerIndex !== 0 || matchStarted;
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("readyBtn")?.addEventListener("click", () => setReady(true));
+  document.getElementById("startMatchBtn")?.addEventListener("click", startMatch);
+});
+
+Object.assign(window.Multiplayer, { setReady, startMatch, renderLobby });

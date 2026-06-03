@@ -73,11 +73,29 @@
       </label>
     </section>
 
+    <section class="options" id="profilePanel">
+      <strong>Profile / Scores</strong>
+      <input id="scoreGamertagInput" placeholder="Gamertag" maxlength="16" />
+      <input id="scorePinInput" placeholder="PIN" maxlength="8" inputmode="numeric" type="password" />
+      <button id="loadProfileBtn" type="button">Load Profile</button>
+      <button id="saveWinBtn" type="button">Save Win</button>
+      <div id="profileStatus">No profile loaded</div>
+      <div id="scoreboard">Scoreboard loading...</div>
+    </section>
+
+    <section class="options" id="lobbyPanel">
+      <strong>Lobby</strong>
+      <div id="lobbyPlayers">Offline</div>
+      <button id="readyBtn" type="button">Ready</button>
+      <button id="startMatchBtn" type="button">Start Match</button>
+    </section>
+
     <section class="options" id="multiplayerPanel">
       <input id="gamertagInput" placeholder="Gamertag" maxlength="16" />
       <button id="createRoomBtn">Create Room</button>
       <input id="roomCodeInput" placeholder="Room Code" maxlength="6" style="text-transform:uppercase" />
       <button id="joinRoomBtn">Join Room</button>
+      <button id="shareRoomBtn" type="button">Share Room</button>
       <span id="roomStatus">Offline</span>
     </section>
 
@@ -86,6 +104,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="multiplayer.js"></script>
+  <script src="scores.js"></script>
   <script src="sounds.js"></script>
   <script src="game.js"></script>
 </body>
