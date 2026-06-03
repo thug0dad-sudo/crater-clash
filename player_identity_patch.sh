@@ -1,3 +1,30 @@
+#!/bin/bash
+set -e
+
+STAMP=$(date +%Y%m%d-%H%M%S)
+mkdir -p backups/$STAMP
+cp index.html game.js multiplayer.js backups/$STAMP/
+
+python3 <<'PY'
+from pathlib import Path
+
+html = Path("index.html").read_text()
+
+if 'id="gamertagInput"' not in html:
+    html = html.replace(
+'''      <button id="createRoomBtn">Create Room</button>
+      <input id="roomCodeInput" placeholder="Room Code" maxlength="6" style="text-transform:uppercase" />
+      <button id="joinRoomBtn">Join Room</button>''',
+'''      <input id="gamertagInput" placeholder="Gamertag" maxlength="16" />
+      <button id="createRoomBtn">Create Room</button>
+      <input id="roomCodeInput" placeholder="Room Code" maxlength="6" style="text-transform:uppercase" />
+      <button id="joinRoomBtn">Join Room</button>'''
+    )
+
+Path("index.html").write_text(html)
+PY
+
+cat > multiplayer.js <<'JS'
 const SUPABASE_URL = "https://hzvyklzmsndyoajmhbxb.supabase.co";
 const SUPABASE_KEY = "sb_publishable_lJjQiFns48hCoyH44SKyKA_YbqpPxht";
 
@@ -193,3 +220,22 @@ window.Multiplayer = {
   get gamertag() { return myGamertag; },
   get isOnline() { return onlineRole !== "offline"; }
 };
+JS
+
+cat >> game.js <<'JS'
+
+/* Player identity display patch */
+window.addEventListener("DOMContentLoaded", () => {
+  const tagInput = document.getElementById("gamertagInput");
+  if (tagInput && window.Multiplayer) {
+    tagInput.value = localStorage.getItem("cc_gamertag") || "";
+    tagInput.addEventListener("input", () => {
+      tagInput.value = Multiplayer.cleanGamertag(tagInput.value);
+      localStorage.setItem("cc_gamertag", tagInput.value);
+    });
+  }
+});
+JS
+
+echo "Player identity patch applied."
+echo "Backups saved to backups/$STAMP"
